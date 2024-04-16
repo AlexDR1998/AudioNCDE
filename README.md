@@ -4,7 +4,7 @@ Neural controllled differential equations (nCDEs) work well for time series - I'
 
 ## Audio source separation (demixing)
 
-As a first experiment, I am using gated neural differential equations (https://arxiv.org/pdf/2307.06398.pdf) to try and perform audio source separation ont he musdb18 dataset (https://sigsep.github.io/datasets/musdb.html)
+As a first experiment, I am using gated neural differential equations (https://arxiv.org/pdf/2307.06398.pdf) to try and perform audio source separation on the musdb18 dataset (https://sigsep.github.io/datasets/musdb.html)
 
 
 ## Requirements
