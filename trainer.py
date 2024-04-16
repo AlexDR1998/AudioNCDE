@@ -10,15 +10,17 @@ import optax
 import musdb
 import einops
 import random
+import tensorflow.summary as tfs
 
 class Trainer(object):
-    def __init__(self,latent_size,mus_path="../Data/musdb18",BATCHES=4,LENGTH=1.0):
+    def __init__(self,latent_size,mus_path="../Data/musdb18",log_dir="logs/audemix",BATCHES=4,LENGTH=1.0):
         self.model=AudioDemixer(1,latent_size)
         self.latent_size = latent_size
         self.BATCHES = BATCHES
         self.LENGTH = LENGTH
         self.MUSDB = musdb.DB(root="../Data/musdb18/")
-    
+        self.LOG = tfs.create_file_writer(log_dir)
+
     def data_loader(self,key):
         """ Loads random self.BATCHES of audio with self.LENGTH in seconds.
         
@@ -47,7 +49,7 @@ class Trainer(object):
         y = np.array(y)
         return x,y 
     
-    def train(self,iters,key=jax.random.PRNGKey(int(time.time()))):
+    def train(self,iters,FILENAME="models/audemix_1",key=jax.random.PRNGKey(int(time.time()))):
         
         @eqx.filter_jit # Wrap this function in JIT for speedup
         def makestep(model,audio,target,opt_state,key):
@@ -74,15 +76,19 @@ class Trainer(object):
         model_diff,_ = model.partition()
         opt_state = self.OPTIMISER.init(model_diff)
         
-        reload_every = 32
-        loss_log = []
+        reload_every = 100 # Loading and chopping up the data is slow, only do every 100 epochs
         audio,target = self.data_loader(key)
         for i in tqdm(range(iters)):
             key = jax.random.fold_in(key,i)
             if i%reload_every==0:
                 audio,target = self.data_loader(key)
+            
             model,opt_state,loss = makestep(model,audio,target,opt_state,key)
-            tqdm.write("Loss: "+str(loss))
-            loss_log.append(loss)
-        plt.plot(loss_log)
-        plt.show()
+            with self.LOG.as_default():
+                tfs.scalar("Loss",loss,step=i)
+    
+            model.save(FILENAME)
+            
+        
+        #plt.plot(loss_log)
+        #plt.show()

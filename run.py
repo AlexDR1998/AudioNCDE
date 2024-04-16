@@ -1,4 +1,4 @@
 from trainer import Trainer
 
-T = Trainer(128,"../Data/musdb18",BATCHES=32,LENGTH=0.01)
-T.train(100)
+T = Trainer(128,"../Data/musdb18",BATCHES=128,LENGTH=1.0)
+T.train(1000)
