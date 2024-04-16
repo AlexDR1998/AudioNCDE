@@ -87,7 +87,7 @@ class Trainer(object):
             with self.LOG.as_default():
                 tfs.scalar("Loss",loss,step=i)
     
-            model.save(FILENAME)
+        model.save(FILENAME,overwrite=True)
             
         
         #plt.plot(loss_log)
