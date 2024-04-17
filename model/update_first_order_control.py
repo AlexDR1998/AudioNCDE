@@ -8,10 +8,12 @@ class Func(eqx.Module):
     G: list
     Demix: list
     Fourier: list 
+    latent_size: int
     def __init__(self,channels=1,latent_size=2048,key=jax.random.PRNGKey(int(time.time()))):
         key1,key2,key3,key4,key5,key6 = jax.random.split(key,6)
         # Time evolution of dynamical system, driven by input mixed audio
         # TODO: Add random fourier modes of time as a channel?
+        self.latent_size = latent_size
         @jax.jit
         def sintanh(x,N=1):
             return np.sin((-1)**N*(2*N+1)*np.pi/2*jax.nn.tanh(x))
@@ -74,9 +76,16 @@ class Func(eqx.Module):
         self.Fourier[0] = eqx.tree_at(b_where,self.Fourier[0],b_time)
     @eqx.filter_jit
     def __call__(self,t,y,args):
-        # Evolve the dynamics of the latent space, driven by input audio as a forcing term
-        #forcing_signal = args
-        #input = np.concatenate((y,forcing_signal))
+
+        """ Gradient update for 2nd order gated neural ODE
+
+        Args:
+            t f32: time
+            y f32[latent_size]: latent space 
+            args (_type_): Empty, just for format of diffrax.diffeqsolve
+        Returns:
+            dy/dt f32[latent_size]: derivative of y with respect to t at time t
+        """
         t = t[np.newaxis]
         for L in self.Fourier:
             t = L(t)
@@ -89,8 +98,7 @@ class Func(eqx.Module):
         for L in self.G:
             g = L(g)
         
-        return g*(f-y) #- np.dot(y,g)
-
+        return g*(f-y)
     def _project_demix(self,y):
         # Project out of latent space back to audio channels
         for L in self.Demix:
