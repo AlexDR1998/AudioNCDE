@@ -11,7 +11,7 @@
 
 export CUDA_VISIBLE_DEVICES=$SGE_HGR_gpu
 module load anaconda
-source activate jax_gpu
+source activate jax_gpu $1
 
 python ./run.py
 source deactivate
