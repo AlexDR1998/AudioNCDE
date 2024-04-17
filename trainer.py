@@ -1,4 +1,4 @@
-from model.audio_demixer import AudioDemixer
+
 import jax.numpy as np
 import equinox as eqx
 import time
@@ -13,13 +13,21 @@ import random
 import tensorflow.summary as tfs
 
 class Trainer(object):
-    def __init__(self,latent_size,mus_path="../Data/musdb18",log_dir="logs/audemix",BATCHES=4,LENGTH=1.0):
-        self.model=AudioDemixer(1,latent_size)
-        self.latent_size = latent_size
+    def __init__(self,
+                 model,
+                 mus_path="../Data/musdb18",
+                 filename="audemix_1",
+                 BATCHES=4,
+                 LENGTH=1.0,
+                 MODE=0):
+        self.model=model
+        self.latent_size = model.func.latent_size
         self.BATCHES = BATCHES
         self.LENGTH = LENGTH
-        self.MUSDB = musdb.DB(root="../Data/musdb18/")
-        self.LOG = tfs.create_file_writer(log_dir)
+        self.MUSDB = musdb.DB(root=mus_path)
+        self.LOG = tfs.create_file_writer("logs/"+filename)
+        self.filename = filename
+        self.MODE = MODE
 
     def data_loader(self,key):
         """ Loads random self.BATCHES of audio with self.LENGTH in seconds.
@@ -43,14 +51,18 @@ class Trainer(object):
             track.chunk_duration = self.LENGTH
             pos =  jax.random.randint(key=subkey,shape=(1,),minval=0, maxval=track.duration - track.chunk_duration)
             track.chunk_start = float(pos[0])
-            x.append(np.mean(track.audio,axis=1))
-            y.append(np.mean(track.targets['vocals'].audio,axis=1))
+            if self.MODE==0: # CDE, mono only
+                x.append(np.mean(track.audio,axis=1))
+                y.append(np.mean(track.targets['vocals'].audio,axis=1))
+            elif self.MODE==1: # Forced ODE, works with stereo
+                x.append(track.audio)
+                y.append(track.targets['vocals'].audio)    
         x = np.array(x)
         y = np.array(y)
         return x,y 
     
-    def train(self,iters,FILENAME="models/audemix_1",key=jax.random.PRNGKey(int(time.time()))):
-        
+    def train(self,iters,FILENAME=None,key=jax.random.PRNGKey(int(time.time()))):
+
         @eqx.filter_jit # Wrap this function in JIT for speedup
         def makestep(model,audio,target,opt_state,key):
             
@@ -62,13 +74,24 @@ class Trainer(object):
                 ts = einops.repeat(ts,"time -> batches time",batches=self.BATCHES)
                 h0 = jax.random.normal(key,shape=(self.BATCHES,self.latent_size))
                 _,_,prediction= v_model(ts,h0,audio)
-                L = np.sqrt(np.mean((prediction[...,0]-target)**2))
+                if self.MODE==0:
+                    L = np.sqrt(np.mean((prediction[...,0]-target)**2))
+                elif self.MODE==1:
+                    L = np.sqrt(np.mean((prediction-target)**2))
                 return L
             
             loss,grads = compute_loss(model,audio,target,key)
             updates,opt_state = self.OPTIMISER.update(grads, opt_state, model)
             model = eqx.apply_updates(model,updates)
             return model,opt_state,loss
+
+
+
+
+        if FILENAME is None:
+            FILENAME = "model/"+self.filename
+        else:
+            FILENAME = "model/"+FILENAME
 
         model = self.model
         schedule = optax.exponential_decay(1e-2, transition_steps=iters, decay_rate=0.99)
