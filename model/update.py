@@ -89,7 +89,7 @@ class Func(eqx.Module):
         for L in self.G:
             g = L(g)
         
-        return np.dot(f,g)-y #- np.dot(y,g)
+        return f*(g-y) #- np.dot(y,g)
 
     def _project_demix(self,y):
         # Project out of latent space back to audio channels
