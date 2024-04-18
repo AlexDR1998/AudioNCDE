@@ -89,9 +89,9 @@ class Trainer(object):
 
 
         if FILENAME is None:
-            FILENAME = "model/"+self.filename
+            FILENAME = "models/"+self.filename
         else:
-            FILENAME = "model/"+FILENAME
+            FILENAME = "models/"+FILENAME
 
         model = self.model
         schedule = optax.exponential_decay(1e-2, transition_steps=iters, decay_rate=0.99)
@@ -101,6 +101,7 @@ class Trainer(object):
         
         reload_every = 100 # Loading and chopping up the data is slow, only do every 100 epochs
         audio,target = self.data_loader(key)
+        loss_log = []
         for i in tqdm(range(iters)):
             key = jax.random.fold_in(key,i)
             if i%reload_every==0:
@@ -109,9 +110,9 @@ class Trainer(object):
             model,opt_state,loss = makestep(model,audio,target,opt_state,key)
             with self.LOG.as_default():
                 tfs.scalar("Loss",loss,step=i)
-    
+            loss_log.append(loss)
         model.save(FILENAME,overwrite=True)
-            
+        return model,loss_log
         
         #plt.plot(loss_log)
         #plt.show()
